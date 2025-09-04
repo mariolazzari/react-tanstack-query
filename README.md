@@ -7,10 +7,32 @@
 ```sh
 pnpm create vite@latest
 pnpm i
+pnpm add @tanstack/react-query
 ```
 
 ### Install TanStack Query
 
-```sh
+```tsx
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import "./App.css";
+
+const queryClient = new QueryClient();
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <div>
+        <h1>Github profile component</h1>
+      </div>
+    </QueryClientProvider>
+  );
+}
+
+export default App;
+```
+
+### Sending a query
+
+```tsx
 
 ```
