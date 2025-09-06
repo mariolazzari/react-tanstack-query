@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./App.css";
 import { GithubProfiles } from "./components/github-profiles";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
 const queryClient = new QueryClient();
 
@@ -8,6 +9,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <GithubProfiles usernames={["mariolazzari", "tanstack"]} />
+      <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );
 }
