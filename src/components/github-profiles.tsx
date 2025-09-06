@@ -2,8 +2,11 @@ import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import type { Profile } from "../types/Profile";
 import { useState } from "react";
 import type { Favorite, FavoriteData } from "../types/Favorite";
+import { GithubRepos } from "./github-repos";
 
 const fetchUser = async (user: string): Promise<Profile> => {
+  console.log("Users refreshed:", new Date().toLocaleTimeString());
+
   const res = await fetch(`https://api.github.com/users/${user}`);
   if (!res.ok) {
     throw new Error("Error fetchig user profile");
@@ -109,6 +112,8 @@ export function GithubProfiles({ usernames }: GithubProfilesProps) {
               <button onClick={() => refreshUser(user.data.login)}>
                 Refresh
               </button>
+
+              <GithubRepos username={user.data.login} />
             </div>
           </div>
         );

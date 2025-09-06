@@ -834,3 +834,285 @@ export function GithubProfiles({ usernames }: GithubProfilesProps) {
   );
 }
 ```
+
+### Cache control
+
+```tsx
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import "./App.css";
+import { GithubProfiles } from "./components/github-profiles";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30 * 1000,
+      gcTime: 5 * 60 * 1000,
+    },
+  },
+});
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <GithubProfiles usernames={["mariolazzari", "tanstack"]} />
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
+  );
+}
+
+export default App;
+```
+
+### Fetching repo data
+
+```tsx
+import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import type { Profile } from "../types/Profile";
+import { useState } from "react";
+import type { Favorite, FavoriteData } from "../types/Favorite";
+import GithubRepos from "./github-repos";
+
+const fetchUser = async (user: string): Promise<Profile> => {
+  console.log("Users refreshed:", new Date().toLocaleTimeString());
+
+  const res = await fetch(`https://api.github.com/users/${user}`);
+  if (!res.ok) {
+    throw new Error("Error fetchig user profile");
+  }
+  return res.json();
+};
+
+const fetchUserRepos = async (user: string) => {
+  const res = await fetch(
+    `https://api.github.com/users/${user}/repos?pre_page=3`
+  );
+  if (!res.ok) {
+    throw new Error("Error fetchig user repos");
+  }
+  return res.json();
+};
+
+type GithubProfilesProps = {
+  usernames: string[];
+};
+
+const saveFavorite = async (data: FavoriteData) => {
+  await new Promise(resolve => {
+    setTimeout(resolve, 500);
+  });
+
+  if (Math.random() < 0.3) {
+    throw new Error("Error saving status...");
+  }
+
+  return data;
+};
+
+export function GithubProfiles({ usernames }: GithubProfilesProps) {
+  const [favs, setFavs] = useState<Favorite>({});
+
+  const queryClient = useQueryClient();
+
+  const users = useQueries({
+    queries: usernames.map(user => ({
+      queryKey: ["github", "user", user],
+      queryFn: () => fetchUser(user),
+      staleTime: 30000,
+    })),
+  });
+
+  const refreshUsers = () => {
+    queryClient.invalidateQueries({
+      queryKey: ["github", "user"],
+    });
+  };
+
+  const refreshUser = (user: string) => {
+    queryClient.invalidateQueries({
+      queryKey: ["github", user],
+    });
+  };
+
+  const favMutation = useMutation({
+    mutationFn: saveFavorite,
+    onMutate: async newFav => {
+      const prevFavs = { ...favs };
+      setFavs(prev => ({
+        ...prev,
+        [newFav.username]: newFav.isFavorite,
+      }));
+      return { prevFavs };
+    },
+    onError: (_err: Error, _newFav, ctx) => {
+      if (ctx) {
+        setFavs(ctx.prevFavs);
+      }
+    },
+  });
+
+  const toggleFav = (username: string): void => {
+    favMutation.mutate({
+      username,
+      isFavorite: !favs[username],
+    });
+  };
+
+  const isLoading = users.some(query => query.isLoading);
+  if (isLoading) {
+    return <p>loading...</p>;
+  }
+
+  return (
+    <div className="profiles-container">
+      <button onClick={refreshUsers}>Refresh users</button>
+
+      {users.map(user => {
+        if (!user.data) {
+          return <p>No data...</p>;
+        }
+
+        const username = user.data.login;
+        const isFavorite = favs[username];
+
+        return (
+          <div key={user.data.login} className="profile-card">
+            <img
+              className="profile-avatar"
+              src={user.data.avatar_url}
+              alt={user.data.login}
+            />
+            <h2>{user.data.login}</h2>
+            <p>{user.data?.name}</p>
+
+            <div>
+              <button onClick={() => toggleFav(user.data.login)}>
+                {isFavorite ? "* Favorited" : "* Add to Favorites"}
+              </button>
+              <button onClick={() => refreshUser(user.data.login)}>
+                Refresh
+              </button>
+
+              <GithubRepos />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+```
+
+### Render repositories data
+
+```tsx
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Repository } from "../types/Repository";
+
+type GithubReposProps = {
+  username: string;
+};
+
+const fetchUserRepos = async (user: string): Promise<Repository[]> => {
+  const res = await fetch(
+    `https://api.github.com/users/${user}/repos?per_page=3`
+  );
+  if (!res.ok) {
+    throw new Error("Error fetchig user repos");
+  }
+  return res.json();
+};
+
+export function GithubRepos({ username }: GithubReposProps) {
+  const { data: repos = [], isLoading } = useQuery({
+    queryKey: ["github", "repos", username],
+    queryFn: () => fetchUserRepos(username),
+  });
+
+  if (isLoading) {
+    return <p>Loading repos...</p>;
+  }
+
+  return (
+    <ul>
+      {repos.map(({ id, html_url, name }) => (
+        <li key={id}>
+          <a href={html_url}>{name}</a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Pagination
+
+```tsx
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import type { Repository } from "../types/Repository";
+import { useState } from "react";
+
+type GithubReposProps = {
+  username: string;
+};
+
+const fetchUserRepos = async (
+  user: string,
+  page = 1
+): Promise<Repository[]> => {
+  const res = await fetch(
+    `https://api.github.com/users/${user}/repos?per_page=${3}&page=${page}`
+  );
+  if (!res.ok) {
+    throw new Error("Error fetching user repos");
+  }
+  return res.json();
+};
+
+export function GithubRepos({ username }: GithubReposProps) {
+  const [page, setPage] = useState(1);
+
+  const { data: repos = [], isLoading } = useQuery({
+    queryKey: ["github", "repos", username, page],
+    queryFn: () => fetchUserRepos(username, page),
+    placeholderData: keepPreviousData,
+  });
+
+  if (repos.length === 0) {
+    return <p>No repository</p>;
+  }
+
+  if (isLoading) {
+    return <p>Loading...</p>;
+  }
+
+  return (
+    <>
+      <ul>
+        {repos.map(({ id, html_url, name }) => (
+          <li key={id}>
+            <a href={html_url} target="_blank" rel="noreferrer">
+              {name}
+            </a>
+          </li>
+        ))}
+      </ul>
+      <div>
+        <button
+          onClick={() => setPage(prev => Math.max(prev - 1, 1))}
+          disabled={page === 1 || isLoading}
+        >
+          Prev
+        </button>
+        <span>{page}</span>
+        <button
+          onClick={() => setPage(prev => prev + 1)}
+          disabled={repos.length < 3 || isLoading}
+        >
+          Next
+        </button>
+      </div>
+    </>
+  );
+}
+```
