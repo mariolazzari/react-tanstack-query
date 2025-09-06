@@ -1,7 +1,7 @@
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import type { Profile } from "../types/Profile";
 import { useState } from "react";
-import type { Favorite } from "../types/Favorite";
+import type { Favorite, FavoriteData } from "../types/Favorite";
 
 const fetchUser = async (user: string): Promise<Profile> => {
   const res = await fetch(`https://api.github.com/users/${user}`);
@@ -15,17 +15,17 @@ type GithubProfilesProps = {
   usernames: string[];
 };
 
+const saveFavorite = async (data: FavoriteData) => {
+  await new Promise(resolve => {
+    setTimeout(resolve, 500);
+  });
+  return data;
+};
+
 export function GithubProfiles({ usernames }: GithubProfilesProps) {
   const [favs, setFavs] = useState<Favorite>({});
 
   const queryClient = useQueryClient();
-
-  const toggleFav = (username: string): void => {
-    setFavs(prev => ({
-      ...prev,
-      [username]: !prev[username],
-    }));
-  };
 
   const users = useQueries({
     queries: usernames.map(user => ({
@@ -46,6 +46,22 @@ export function GithubProfiles({ usernames }: GithubProfilesProps) {
     });
   };
 
+  const favMutation = useMutation({
+    mutationFn: saveFavorite,
+    onSuccess: data =>
+      setFavs(prev => ({
+        ...prev,
+        [data.username]: data.isFavorite,
+      })),
+  });
+
+  const toggleFav = (username: string): void => {
+    favMutation.mutate({
+      username,
+      isFavorite: !favs[username],
+    });
+  };
+
   const isLoading = users.some(query => query.isLoading);
   if (isLoading) {
     return <p>loading...</p>;
@@ -60,6 +76,11 @@ export function GithubProfiles({ usernames }: GithubProfilesProps) {
           return <p>No data...</p>;
         }
 
+        const username = user.data.login;
+        const isFavorite = favs[username];
+        const isPending =
+          favMutation.isPending && favMutation.variables?.username === username;
+
         return (
           <div key={user.data.login} className="profile-card">
             <img
@@ -72,7 +93,11 @@ export function GithubProfiles({ usernames }: GithubProfilesProps) {
 
             <div>
               <button onClick={() => toggleFav(user.data.login)}>
-                {favs[user.data.login] ? "Fav" : "Add to Favs"}
+                {isPending
+                  ? "Saving..."
+                  : isFavorite
+                  ? "* Favorited"
+                  : "* Add to Favorites"}
               </button>
               <button onClick={() => refreshUser(user.data.login)}>
                 Refresh
