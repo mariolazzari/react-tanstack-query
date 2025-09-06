@@ -29,7 +29,6 @@ const saveFavorite = async (data: FavoriteData) => {
 
 export function GithubProfiles({ usernames }: GithubProfilesProps) {
   const [favs, setFavs] = useState<Favorite>({});
-  const [error, setError] = useState("");
 
   const queryClient = useQueryClient();
 
@@ -54,16 +53,18 @@ export function GithubProfiles({ usernames }: GithubProfilesProps) {
 
   const favMutation = useMutation({
     mutationFn: saveFavorite,
-    onSuccess: data => {
-      setError("");
+    onMutate: async newFav => {
+      const prevFavs = { ...favs };
       setFavs(prev => ({
         ...prev,
-        [data.username]: data.isFavorite,
+        [newFav.username]: newFav.isFavorite,
       }));
+      return { prevFavs };
     },
-    onError: (err: Error) => {
-      setError(err.message);
-      console.error("Mutation failed:", err);
+    onError: (_err: Error, _newFav, ctx) => {
+      if (ctx) {
+        setFavs(ctx.prevFavs);
+      }
     },
   });
 
@@ -83,8 +84,6 @@ export function GithubProfiles({ usernames }: GithubProfilesProps) {
     <div className="profiles-container">
       <button onClick={refreshUsers}>Refresh users</button>
 
-      {error && <h3>{error}</h3>}
-
       {users.map(user => {
         if (!user.data) {
           return <p>No data...</p>;
@@ -92,8 +91,6 @@ export function GithubProfiles({ usernames }: GithubProfilesProps) {
 
         const username = user.data.login;
         const isFavorite = favs[username];
-        const isPending =
-          favMutation.isPending && favMutation.variables?.username === username;
 
         return (
           <div key={user.data.login} className="profile-card">
@@ -107,11 +104,7 @@ export function GithubProfiles({ usernames }: GithubProfilesProps) {
 
             <div>
               <button onClick={() => toggleFav(user.data.login)}>
-                {isPending
-                  ? "Saving..."
-                  : isFavorite
-                  ? "* Favorited"
-                  : "* Add to Favorites"}
+                {isFavorite ? "* Favorited" : "* Add to Favorites"}
               </button>
               <button onClick={() => refreshUser(user.data.login)}>
                 Refresh
