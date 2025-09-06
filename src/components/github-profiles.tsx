@@ -19,11 +19,17 @@ const saveFavorite = async (data: FavoriteData) => {
   await new Promise(resolve => {
     setTimeout(resolve, 500);
   });
+
+  if (Math.random() < 0.3) {
+    throw new Error("Error saving status...");
+  }
+
   return data;
 };
 
 export function GithubProfiles({ usernames }: GithubProfilesProps) {
   const [favs, setFavs] = useState<Favorite>({});
+  const [error, setError] = useState("");
 
   const queryClient = useQueryClient();
 
@@ -48,11 +54,17 @@ export function GithubProfiles({ usernames }: GithubProfilesProps) {
 
   const favMutation = useMutation({
     mutationFn: saveFavorite,
-    onSuccess: data =>
+    onSuccess: data => {
+      setError("");
       setFavs(prev => ({
         ...prev,
         [data.username]: data.isFavorite,
-      })),
+      }));
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+      console.error("Mutation failed:", err);
+    },
   });
 
   const toggleFav = (username: string): void => {
@@ -70,6 +82,8 @@ export function GithubProfiles({ usernames }: GithubProfilesProps) {
   return (
     <div className="profiles-container">
       <button onClick={refreshUsers}>Refresh users</button>
+
+      {error && <h3>{error}</h3>}
 
       {users.map(user => {
         if (!user.data) {
